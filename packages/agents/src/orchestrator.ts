@@ -1,4 +1,5 @@
 import type { AgentEvent, BrandGuideline, ContentAngle, PipelineRun, SocialDraft } from "@social-agents/shared";
+import type { AgentLlmProvider } from "./llmProvider.js";
 import { runBrandReviewTask, runCreativeTask, runResearchTask, runStrategyTask, type PipelineInput } from "./taskRunner.js";
 
 export interface OrchestratorResult {
@@ -25,16 +26,18 @@ export async function runSocialPipeline(input: PipelineInput): Promise<Orchestra
 
   emit("cmo-orchestrator", "run_started", `Started social pipeline for: ${input.goal}`);
   emit("research-agent", "task_started", "Collecting evidence-backed research signals.");
+  const provider = input.llmProvider;
+
   const researchBrief = await runResearchTask(input);
   emit("research-agent", "task_completed", "Research brief completed.", { sections: Object.keys(researchBrief) });
 
   emit("strategy-agent", "task_started", "Turning research brief into platform angles.");
-  const angles = await runStrategyTask(researchBrief, input.platforms);
+  const angles = await runStrategyTask(researchBrief, input.platforms, provider);
   emit("strategy-agent", "task_completed", "Strategy angles completed.", { count: angles.length });
 
   const drafts: SocialDraft[] = [];
   for (const angle of angles) {
-    drafts.push(await buildDraft(runId, angle, input.brand, emit));
+    drafts.push(await buildDraft(runId, angle, input.brand, emit, provider));
   }
 
   emit("packager-agent", "task_started", "Packaging drafts for admin approval.", { draftIds: drafts.map((draft) => draft.id) });
@@ -58,14 +61,15 @@ async function buildDraft(
   runId: string,
   angle: ContentAngle,
   brand: BrandGuideline,
-  emit: (agentId: string, type: AgentEvent["type"], message: string, metadata?: Record<string, unknown>) => void
+  emit: (agentId: string, type: AgentEvent["type"], message: string, metadata?: Record<string, unknown>) => void,
+  provider?: AgentLlmProvider
 ): Promise<SocialDraft> {
   emit("creative-content-agent", "task_started", `Creating draft for ${angle.platform}.`, { angleId: angle.id });
-  const creative = await runCreativeTask(angle, brand);
+  const creative = await runCreativeTask(angle, brand, provider);
   emit("creative-content-agent", "task_completed", `Creative draft created for ${angle.platform}.`);
 
   emit("brand-guideline-agent", "task_started", `Reviewing ${angle.platform} draft against brand guidelines.`);
-  const brandReview = await runBrandReviewTask(brand, creative.caption, creative.imagePrompt);
+  const brandReview = await runBrandReviewTask(brand, creative.caption, creative.imagePrompt, provider);
   emit("brand-guideline-agent", "task_completed", `Brand review ${brandReview.passed ? "passed" : "needs edits"}.`, {
     requiredEdits: brandReview.requiredEdits
   });

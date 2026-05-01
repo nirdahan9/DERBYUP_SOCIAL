@@ -6,15 +6,35 @@ import {
   type ResearchBrief,
   type SocialDraft
 } from "@social-agents/shared";
+import { createDefaultLlmProvider, type AgentLlmProvider } from "./llmProvider.js";
 
 export interface PipelineInput {
   goal: string;
   platforms: ContentAngle["platform"][];
   brand: BrandGuideline;
   manualSources?: string[];
+  llmProvider?: AgentLlmProvider;
 }
 
 export async function runResearchTask(input: PipelineInput): Promise<ResearchBrief> {
+  const provider = input.llmProvider ?? createDefaultLlmProvider();
+  if (provider) {
+    const brief = await provider.generateJson<ResearchBrief>({
+      system: "You are the Research Agent for a social media control plane. Produce evidence-aware research only.",
+      prompt: [
+        `Goal: ${input.goal}`,
+        `Platforms: ${input.platforms.join(", ")}`,
+        `Manual sources: ${(input.manualSources ?? []).join(", ") || "none"}`,
+        "Return a ResearchBrief JSON object with marketSignals, audienceInsights, competitorPatterns, riskFlags, and platformNotes.",
+        "Every insight must include id, insight, confidence, evidence, and recommendedAction.",
+        "If no concrete source exists, use confidence \"hypothesis\" and sourceType \"hypothesis\"."
+      ].join("\n")
+    });
+
+    validateResearchBrief(brief);
+    return brief;
+  }
+
   const sourceUrl = input.manualSources?.[0] ?? "https://trends.google.com/trends/";
   const brief: ResearchBrief = {
     marketSignals: [
@@ -79,7 +99,23 @@ export async function runResearchTask(input: PipelineInput): Promise<ResearchBri
   return brief;
 }
 
-export async function runStrategyTask(brief: ResearchBrief, platforms: ContentAngle["platform"][]): Promise<ContentAngle[]> {
+export async function runStrategyTask(
+  brief: ResearchBrief,
+  platforms: ContentAngle["platform"][],
+  provider: AgentLlmProvider | undefined = createDefaultLlmProvider()
+): Promise<ContentAngle[]> {
+  if (provider) {
+    return provider.generateJson<ContentAngle[]>({
+      system: "You are the Strategy Agent. Convert research into platform-specific social content angles.",
+      prompt: [
+        `Platforms: ${platforms.join(", ")}`,
+        `Research brief JSON: ${JSON.stringify(brief)}`,
+        "Return a JSON array of ContentAngle objects.",
+        "Each object must include id, title, platform, hook, format, cta, and sourceInsightIds."
+      ].join("\n")
+    });
+  }
+
   return platforms.map((platform, index) => ({
     id: `angle-${platform}-${index + 1}`,
     title: `Transformation proof for ${platform}`,
@@ -94,7 +130,24 @@ export async function runStrategyTask(brief: ResearchBrief, platforms: ContentAn
   }));
 }
 
-export async function runBrandReviewTask(brand: BrandGuideline, caption: string, imagePrompt?: string): Promise<BrandReview> {
+export async function runBrandReviewTask(
+  brand: BrandGuideline,
+  caption: string,
+  imagePrompt?: string,
+  provider: AgentLlmProvider | undefined = createDefaultLlmProvider()
+): Promise<BrandReview> {
+  if (provider) {
+    return provider.generateJson<BrandReview>({
+      system: "You are the Brand Guideline Agent. Review content for tone, claims, banned language, and brand fit.",
+      prompt: [
+        `Brand guideline JSON: ${JSON.stringify(brand)}`,
+        `Caption: ${caption}`,
+        `Image prompt: ${imagePrompt ?? ""}`,
+        "Return a BrandReview JSON object with passed, notes, and requiredEdits."
+      ].join("\n")
+    });
+  }
+
   const requiredEdits: string[] = [];
   const notes: string[] = [];
   const reviewText = `${caption} ${imagePrompt ?? ""}`.toLowerCase();
@@ -122,7 +175,23 @@ export async function runBrandReviewTask(brand: BrandGuideline, caption: string,
   };
 }
 
-export async function runCreativeTask(angle: ContentAngle, brand: BrandGuideline): Promise<Pick<SocialDraft, "caption" | "hook" | "imagePrompt" | "videoSpec">> {
+export async function runCreativeTask(
+  angle: ContentAngle,
+  brand: BrandGuideline,
+  provider: AgentLlmProvider | undefined = createDefaultLlmProvider()
+): Promise<Pick<SocialDraft, "caption" | "hook" | "imagePrompt" | "videoSpec">> {
+  if (provider) {
+    return provider.generateJson<Pick<SocialDraft, "caption" | "hook" | "imagePrompt" | "videoSpec">>({
+      system: "You are the Creative Content Agent. Write Hebrew social content and visual/video direction.",
+      prompt: [
+        `Content angle JSON: ${JSON.stringify(angle)}`,
+        `Brand guideline JSON: ${JSON.stringify(brand)}`,
+        "Return JSON with caption, hook, optional imagePrompt, and optional videoSpec.",
+        "If videoSpec is included, it must match width 1080, height 1920, fps 30, durationSeconds, title, captions, cta, and brand."
+      ].join("\n")
+    });
+  }
+
   const caption = `${angle.hook}\n\nבמקום עוד פוסט כללי, זה כיוון שמבוסס על אות מחקרי ומותאם ל-${angle.platform}.\n\n${angle.cta}`;
   const imagePrompt = `Create a clean social visual using ${brand.colors.primary}, ${brand.colors.secondary}, and ${brand.colors.accent}. Show a before/after workflow with confident Hebrew brand tone.`;
 
@@ -145,4 +214,10 @@ export async function runCreativeTask(angle: ContentAngle, brand: BrandGuideline
           }
         : undefined
   };
+}
+
+function validateResearchBrief(brief: ResearchBrief): void {
+  for (const section of [brief.marketSignals, brief.audienceInsights, brief.competitorPatterns, brief.riskFlags]) {
+    for (const insight of section) assertValidResearchInsight(insight);
+  }
 }

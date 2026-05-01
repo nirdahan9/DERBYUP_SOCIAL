@@ -51,6 +51,9 @@ Open the API service in Railway:
 ```text
 DATABASE_URL=${{Postgres-Lyl3.DATABASE_URL}}
 DATABASE_SSL=true
+GROQ_API_KEY=${{Postgres-Lyl3.GROQ_API_KEY}}
+AGENT_LLM_PROVIDER=groq
+AGENT_LLM_MODEL=llama-3.3-70b-versatile
 ```
 
 If Railway renamed the database service differently, use that exact service name in the reference variable.

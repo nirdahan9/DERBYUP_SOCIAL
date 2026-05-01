@@ -10,6 +10,7 @@ Last updated: 2026-05-01
 - Agent skills use the requested markdown/frontmatter structure.
 - PostgreSQL migration exists and is ready for the Railway database.
 - API can use PostgreSQL when `DATABASE_URL` is set, otherwise it falls back to memory.
+- Agent tasks use Groq through `GROQ_API_KEY` when configured, otherwise they fall back to deterministic mocks.
 - `typecheck`, `build`, and `test` pass locally.
 
 ## Priority 0 - GitHub And Railway
@@ -55,6 +56,7 @@ Last updated: 2026-05-01
 - [x] Add skill loader support for nested `metadata.version`.
 - [x] Load agent skills at runtime and expose them through an API endpoint.
 - [x] Add agent enable/disable updates from API.
+- [x] Add Groq-only LLM provider with mock fallback when `GROQ_API_KEY` is absent.
 - [ ] Add model and budget configuration per agent.
 - [ ] Add heartbeat schedules for recurring agent work.
 
