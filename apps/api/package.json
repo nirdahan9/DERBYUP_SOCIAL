@@ -1,0 +1,29 @@
+{
+  "name": "@social-agents/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/apps/api/src/server.js",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "db:migrate": "tsx src/migrate.ts",
+    "worker": "tsx src/worker.ts",
+    "video:worker": "tsx src/videoWorker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/apps/api/src/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test dist/**/*.test.js",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@social-agents/agents": "workspace:*",
+    "@social-agents/remotion": "workspace:*",
+    "@social-agents/shared": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

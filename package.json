@@ -1,0 +1,26 @@
+{
+  "name": "social-agent-control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Paperclip-inspired control plane for social media, brand, and video agents.",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "corepack pnpm --parallel --filter @social-agents/api --filter @social-agents/web dev",
+    "dev:api": "corepack pnpm --filter @social-agents/api dev",
+    "dev:web": "corepack pnpm --filter @social-agents/web dev",
+    "build:api": "corepack pnpm --filter @social-agents/api build",
+    "start:api": "corepack pnpm --filter @social-agents/api start",
+    "db:migrate": "corepack pnpm --filter @social-agents/api db:migrate",
+    "build": "corepack pnpm -r build",
+    "test": "corepack pnpm -r test",
+    "typecheck": "corepack pnpm -r typecheck",
+    "lint": "corepack pnpm -r lint"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "typescript": "^5.7.2"
+  }
+}

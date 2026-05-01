@@ -1,0 +1,23 @@
+{
+  "name": "@social-agents/remotion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/remotion/src/index.js",
+  "types": "dist/remotion/src/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test dist/**/*.test.js",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@social-agents/shared": "workspace:*",
+    "react": "^19.0.0",
+    "remotion": "^4.0.341"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "typescript": "^5.7.2"
+  }
+}

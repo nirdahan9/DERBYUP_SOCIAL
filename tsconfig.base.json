@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@social-agents/shared": ["packages/shared/src/index.ts"],
+      "@social-agents/agents": ["packages/agents/src/index.ts"],
+      "@social-agents/remotion": ["packages/remotion/src/index.ts"]
+    }
+  }
+}

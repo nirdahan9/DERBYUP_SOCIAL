@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.turbo/
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage/
+storage/
+*.log
+*.mp4
+*.mov
