@@ -16,11 +16,25 @@ interface AgentRow {
 
 export interface AgentStore {
   listAgents(): Promise<AgentDefinition[]>;
+  updateAgentStatus(agentId: string, status: AgentStatus): Promise<AgentDefinition>;
 }
 
 export class StaticAgentStore implements AgentStore {
+  private readonly statusOverrides = new Map<string, AgentStatus>();
+
   async listAgents(): Promise<AgentDefinition[]> {
-    return defaultAgentRoster;
+    return defaultAgentRoster.map((agent) => ({
+      ...agent,
+      status: this.statusOverrides.get(agent.id) ?? agent.status
+    }));
+  }
+
+  async updateAgentStatus(agentId: string, status: AgentStatus): Promise<AgentDefinition> {
+    const agent = defaultAgentRoster.find((candidate) => candidate.id === agentId);
+    if (!agent) throw new Error(`Unknown agent: ${agentId}`);
+
+    this.statusOverrides.set(agentId, status);
+    return { ...agent, status };
   }
 }
 
@@ -41,6 +55,25 @@ export class PostgresAgentStore implements AgentStore {
     const result = await this.pool.query<AgentRow>("select * from agents order by created_at asc");
     return result.rows.map(mapAgentRow);
   }
+
+  async updateAgentStatus(agentId: string, status: AgentStatus): Promise<AgentDefinition> {
+    const result = await this.pool.query<AgentRow>(
+      `
+        update agents
+        set status = $2, updated_at = now()
+        where id = $1
+        returning *
+      `,
+      [agentId, status]
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error(`Unknown agent: ${agentId}`);
+    return mapAgentRow(row);
+  }
+}
+
+export function isAgentStatus(value: unknown): value is AgentStatus {
+  return value === "enabled" || value === "disabled" || value === "paused";
 }
 
 export function mapAgentRow(row: AgentRow): AgentDefinition {

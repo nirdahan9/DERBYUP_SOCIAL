@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import { URL } from "node:url";
 import { runSocialPipeline } from "@social-agents/agents";
-import type { BrandGuideline, ContentAngle } from "@social-agents/shared";
-import { agentStore, agentStoreKind } from "./agentStore.js";
+import type { AgentStatus, BrandGuideline, ContentAngle } from "@social-agents/shared";
+import { agentStore, agentStoreKind, isAgentStatus } from "./agentStore.js";
 import { defaultBrand, defaultPlatforms } from "./defaults.js";
 import { readJson, sendError, sendJson } from "./http.js";
 import { runStore, storeKind } from "./runStore.js";
@@ -13,6 +13,10 @@ interface CreateRunBody {
   platforms?: ContentAngle["platform"][];
   brand?: BrandGuideline;
   manualSources?: string[];
+}
+
+interface UpdateAgentStatusBody {
+  status?: AgentStatus;
 }
 
 const server = createServer(async (request, response) => {
@@ -31,6 +35,38 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "GET" && url.pathname === "/api/agents") {
       sendJson(response, 200, { agents: await agentStore.listAgents(), store: agentStoreKind });
+      return;
+    }
+
+    if (request.method === "PATCH" && url.pathname.match(/^\/api\/agents\/[^/]+\/status$/)) {
+      const [, apiSegment, agentsSegment, agentId, statusSegment] = url.pathname.split("/");
+      if (apiSegment !== "api" || agentsSegment !== "agents" || statusSegment !== "status") {
+        sendJson(response, 404, { error: "Not found." });
+        return;
+      }
+      if (!agentId) {
+        sendJson(response, 400, { error: "Missing agent id." });
+        return;
+      }
+
+      const body = await readJson<UpdateAgentStatusBody>(request);
+      if (!isAgentStatus(body.status)) {
+        sendJson(response, 400, { error: "Invalid agent status." });
+        return;
+      }
+
+      let agent;
+      try {
+        agent = await agentStore.updateAgentStatus(agentId, body.status);
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Unknown agent:")) {
+          sendJson(response, 404, { error: "Agent not found." });
+          return;
+        }
+        throw error;
+      }
+
+      sendJson(response, 200, { agent, store: agentStoreKind });
       return;
     }
 

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { findProjectRoot, listAgentSkills, resolveSkillPath } from "./skillStore.js";
-import type { AgentDefinition } from "@social-agents/shared";
+import type { AgentDefinition, AgentStatus } from "@social-agents/shared";
 import type { AgentStore } from "./agentStore.js";
 
 test("loads skills for agents from their configured skill paths", async () => {
@@ -39,5 +39,11 @@ class SingleAgentStore implements AgentStore {
         skillPath: "packages/agents/skills/strategy-agent.md"
       }
     ];
+  }
+
+  async updateAgentStatus(agentId: string, status: AgentStatus): Promise<AgentDefinition> {
+    const agent = (await this.listAgents()).find((candidate) => candidate.id === agentId);
+    if (!agent) throw new Error(`Unknown agent: ${agentId}`);
+    return { ...agent, status };
   }
 }

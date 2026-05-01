@@ -54,7 +54,7 @@ Last updated: 2026-05-01
 - [x] Convert agent skill files to the requested `name`, `description`, `metadata.version` structure.
 - [x] Add skill loader support for nested `metadata.version`.
 - [x] Load agent skills at runtime and expose them through an API endpoint.
-- [ ] Add agent enable/disable updates from API.
+- [x] Add agent enable/disable updates from API.
 - [ ] Add model and budget configuration per agent.
 - [ ] Add heartbeat schedules for recurring agent work.
 
