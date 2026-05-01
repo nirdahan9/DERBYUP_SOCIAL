@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { findProjectRoot, listAgentSkills, resolveSkillPath } from "./skillStore.js";
 import type { AgentDefinition, AgentStatus } from "@social-agents/shared";
-import type { AgentStore } from "./agentStore.js";
+import type { AgentConfigUpdate, AgentStore } from "./agentStore.js";
 
 test("loads skills for agents from their configured skill paths", async () => {
   const skills = await listAgentSkills(new SingleAgentStore());
@@ -45,5 +45,11 @@ class SingleAgentStore implements AgentStore {
     const agent = (await this.listAgents()).find((candidate) => candidate.id === agentId);
     if (!agent) throw new Error(`Unknown agent: ${agentId}`);
     return { ...agent, status };
+  }
+
+  async updateAgentConfig(agentId: string, config: AgentConfigUpdate): Promise<AgentDefinition> {
+    const agent = (await this.listAgents()).find((candidate) => candidate.id === agentId);
+    if (!agent) throw new Error(`Unknown agent: ${agentId}`);
+    return { ...agent, ...config };
   }
 }

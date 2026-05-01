@@ -15,7 +15,7 @@ export function sendJson(response: ServerResponse, statusCode: number, body: unk
   response.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
     "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
     "access-control-allow-headers": "content-type"
   });
   response.end(JSON.stringify(body, null, 2));

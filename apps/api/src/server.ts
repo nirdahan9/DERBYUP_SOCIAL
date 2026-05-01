@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { URL } from "node:url";
 import { runSocialPipeline } from "@social-agents/agents";
 import type { AgentStatus, BrandGuideline, ContentAngle } from "@social-agents/shared";
-import { agentStore, agentStoreKind, isAgentStatus } from "./agentStore.js";
+import { agentStore, agentStoreKind, isAgentStatus, parseAgentConfigUpdate } from "./agentStore.js";
 import { defaultBrand, defaultPlatforms } from "./defaults.js";
 import { readJson, sendError, sendJson } from "./http.js";
 import { runStore, storeKind } from "./runStore.js";
@@ -58,6 +58,38 @@ const server = createServer(async (request, response) => {
       let agent;
       try {
         agent = await agentStore.updateAgentStatus(agentId, body.status);
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Unknown agent:")) {
+          sendJson(response, 404, { error: "Agent not found." });
+          return;
+        }
+        throw error;
+      }
+
+      sendJson(response, 200, { agent, store: agentStoreKind });
+      return;
+    }
+
+    if (request.method === "PATCH" && url.pathname.match(/^\/api\/agents\/[^/]+\/config$/)) {
+      const [, apiSegment, agentsSegment, agentId, configSegment] = url.pathname.split("/");
+      if (apiSegment !== "api" || agentsSegment !== "agents" || configSegment !== "config") {
+        sendJson(response, 404, { error: "Not found." });
+        return;
+      }
+      if (!agentId) {
+        sendJson(response, 400, { error: "Missing agent id." });
+        return;
+      }
+
+      const config = parseAgentConfigUpdate(await readJson<unknown>(request));
+      if (!config) {
+        sendJson(response, 400, { error: "Invalid agent config." });
+        return;
+      }
+
+      let agent;
+      try {
+        agent = await agentStore.updateAgentConfig(agentId, config);
       } catch (error) {
         if (error instanceof Error && error.message.startsWith("Unknown agent:")) {
           sendJson(response, 404, { error: "Agent not found." });
