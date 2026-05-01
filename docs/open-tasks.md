@@ -11,6 +11,7 @@ Last updated: 2026-05-02
 - PostgreSQL migration exists and is ready for the Railway database.
 - API can use PostgreSQL when `DATABASE_URL` is set, otherwise it falls back to memory.
 - Agent tasks use Groq through `GROQ_API_KEY` when configured, otherwise they fall back to deterministic mocks.
+- YouTube connector can search public videos through YouTube Data API v3 when `YOUTUBE_API_KEY` is configured.
 - `typecheck`, `build`, and `test` pass locally.
 - API supports per-agent status, model, and monthly budget updates.
 
@@ -66,7 +67,7 @@ Last updated: 2026-05-02
 - [x] Define approved source policy and hypothesis rules.
 - [x] Validate research insights so unsupported claims are marked as hypotheses.
 - [ ] Implement Serper connector.
-- [ ] Implement YouTube Data API connector.
+- [x] Implement YouTube Data API connector.
 - [ ] Add manual competitor URL ingestion.
 - [ ] Add uploaded screenshot/export ingestion.
 - [ ] Add Google Drive connector later.
