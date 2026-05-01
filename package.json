@@ -11,6 +11,7 @@
     "dev": "corepack pnpm --parallel --filter @social-agents/api --filter @social-agents/web dev",
     "dev:api": "corepack pnpm --filter @social-agents/api dev",
     "dev:web": "corepack pnpm --filter @social-agents/web dev",
+    "start": "corepack pnpm --filter @social-agents/api start",
     "build:api": "corepack pnpm --filter @social-agents/api build",
     "start:api": "corepack pnpm --filter @social-agents/api start",
     "db:migrate": "corepack pnpm --filter @social-agents/api db:migrate",
