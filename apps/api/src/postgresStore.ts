@@ -1,5 +1,6 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import type { AgentEvent, ApprovalStatus, PipelineRun, SocialDraft } from "@social-agents/shared";
+import { collectAgentTaskRecords } from "./agentTasks.js";
 import { collectResearchSourceRecords } from "./researchSources.js";
 import type { RunStore } from "./store.js";
 
@@ -125,15 +126,29 @@ export class PostgresStore implements RunStore {
   }
 
   async appendEvents(events: AgentEvent[]): Promise<void> {
-    for (const event of events) {
-      await this.pool.query(
-        `
-          insert into events (id, run_id, agent_id, type, message, metadata, created_at)
-          values ($1, $2, $3, $4, $5, $6, $7)
-          on conflict (id) do nothing
-        `,
-        [event.id, event.runId, event.agentId, event.type, event.message, event.metadata ?? {}, event.createdAt]
-      );
+    if (events.length === 0) return;
+
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      for (const event of events) {
+        await client.query(
+          `
+            insert into events (id, run_id, agent_id, type, message, metadata, created_at)
+            values ($1, $2, $3, $4, $5, $6, $7)
+            on conflict (id) do nothing
+          `,
+          [event.id, event.runId, event.agentId, event.type, event.message, event.metadata ?? {}, event.createdAt]
+        );
+      }
+
+      await upsertTaskRecords(client, events);
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -200,6 +215,37 @@ export class PostgresStore implements RunStore {
 
     const nextStatus = Number(counts.rejected_count) > 0 ? "awaiting_approval" : "completed";
     await this.pool.query("update runs set status = $2, updated_at = now() where id = $1", [runId, nextStatus]);
+  }
+}
+
+async function upsertTaskRecords(client: PoolClient, events: AgentEvent[]): Promise<void> {
+  const tasks = collectAgentTaskRecords(events);
+  for (const task of tasks) {
+    await client.query(
+      `
+        insert into tasks (id, run_id, agent_id, status, input, output, error, started_at, completed_at, created_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        on conflict (id) do update set
+          status = excluded.status,
+          input = excluded.input,
+          output = excluded.output,
+          error = excluded.error,
+          started_at = excluded.started_at,
+          completed_at = excluded.completed_at
+      `,
+      [
+        task.id,
+        task.runId,
+        task.agentId,
+        task.status,
+        task.input,
+        task.output ?? null,
+        task.error ?? null,
+        task.startedAt ?? null,
+        task.completedAt ?? null,
+        task.createdAt
+      ]
+    );
   }
 }
 

@@ -129,6 +129,19 @@ export interface AgentEvent {
   metadata?: Record<string, unknown>;
 }
 
+export interface AgentTask {
+  id: string;
+  runId: string;
+  agentId: string;
+  status: TaskStatus;
+  input: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+}
+
 export interface PipelineRun {
   id: string;
   status: RunStatus;

@@ -37,6 +37,8 @@ export async function runSocialPipeline(input: PipelineInput): Promise<Orchestra
     drafts.push(await buildDraft(runId, angle, input.brand, emit));
   }
 
+  emit("packager-agent", "task_started", "Packaging drafts for admin approval.", { draftIds: drafts.map((draft) => draft.id) });
+  emit("packager-agent", "task_completed", "Draft package completed.", { draftIds: drafts.map((draft) => draft.id) });
   emit("packager-agent", "approval_needed", "Drafts packaged and waiting for admin approval.", { draftIds: drafts.map((draft) => draft.id) });
 
   const run: PipelineRun = {
