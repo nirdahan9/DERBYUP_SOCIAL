@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { URL } from "node:url";
 import { runSocialPipeline } from "@social-agents/agents";
+import { normalizeManualSourceUrls } from "@social-agents/shared";
 import type { AgentStatus, BrandGuideline, ContentAngle } from "@social-agents/shared";
 import { agentStore, agentStoreKind, isAgentStatus, parseAgentConfigUpdate } from "./agentStore.js";
 import { defaultBrand, defaultPlatforms } from "./defaults.js";
@@ -129,11 +130,17 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "POST" && url.pathname === "/api/runs") {
       const body = await readJson<CreateRunBody>(request);
+      const manualSources = normalizeManualSourceUrls(body.manualSources);
+      if (manualSources.errors.length > 0) {
+        sendJson(response, 400, { error: "Invalid manual sources.", details: manualSources.errors });
+        return;
+      }
+
       const result = await runSocialPipeline({
         goal: body.goal ?? "Create a weekly social content pack",
         platforms: body.platforms?.length ? body.platforms : defaultPlatforms,
         brand: body.brand ?? defaultBrand,
-        manualSources: body.manualSources ?? []
+        manualSources: manualSources.sources
       });
 
       await runStore.saveRun(result.run);

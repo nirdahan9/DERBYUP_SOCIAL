@@ -71,7 +71,8 @@ Last updated: 2026-05-02
 - [x] Feed Serper public search evidence into Research Agent briefs.
 - [x] Implement YouTube Data API connector.
 - [x] Feed YouTube Data API evidence into Research Agent briefs.
-- [ ] Add manual competitor URL ingestion.
+- [x] Add manual competitor URL ingestion.
+- [x] Validate manual research source URLs before creating a run.
 - [ ] Add uploaded screenshot/export ingestion.
 - [ ] Add Google Drive connector later.
 - [ ] Add UI for entering manual research sources before creating a run.

@@ -1,5 +1,10 @@
 import type { ResearchEvidence, ResearchInsight, ResearchSourceType } from "./types.js";
 
+export interface ManualSourceValidationResult {
+  errors: string[];
+  sources: string[];
+}
+
 export const allowedResearchSourceTypes: ResearchSourceType[] = [
   "serper_search",
   "google_trends",
@@ -12,6 +17,63 @@ export const allowedResearchSourceTypes: ResearchSourceType[] = [
   "google_drive",
   "hypothesis"
 ];
+
+export function normalizeManualSourceUrls(value: unknown, maxSources = 10): ManualSourceValidationResult {
+  const errors: string[] = [];
+  const sources: string[] = [];
+  const seen = new Set<string>();
+
+  if (value === undefined) return { errors, sources };
+  if (!Array.isArray(value)) return { errors: ["manualSources must be an array of URLs."], sources };
+  if (value.length > maxSources) {
+    errors.push(`manualSources cannot include more than ${maxSources} URLs.`);
+  }
+
+  value.forEach((item, index) => {
+    if (typeof item !== "string") {
+      errors.push(`manualSources[${index}] must be a URL string.`);
+      return;
+    }
+
+    const trimmed = item.trim();
+    if (!trimmed) {
+      errors.push(`manualSources[${index}] cannot be empty.`);
+      return;
+    }
+
+    let url: URL;
+    try {
+      url = new URL(trimmed);
+    } catch {
+      errors.push(`manualSources[${index}] must be a valid URL.`);
+      return;
+    }
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      errors.push(`manualSources[${index}] must use http or https.`);
+      return;
+    }
+
+    if (url.username || url.password) {
+      errors.push(`manualSources[${index}] cannot include credentials.`);
+      return;
+    }
+
+    if (isBlockedManualSourceHost(url.hostname)) {
+      errors.push(`manualSources[${index}] cannot point to localhost or private network hosts.`);
+      return;
+    }
+
+    url.hash = "";
+    const normalized = url.toString();
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      sources.push(normalized);
+    }
+  });
+
+  return { errors, sources };
+}
 
 export function validateResearchEvidence(evidence: ResearchEvidence): string[] {
   const errors: string[] = [];
@@ -63,4 +125,26 @@ export function assertValidResearchInsight(insight: ResearchInsight): void {
   if (errors.length > 0) {
     throw new Error(errors.join(" "));
   }
+}
+
+function isBlockedManualSourceHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  if (normalized === "localhost" || normalized.endsWith(".localhost")) return true;
+
+  const ipv4 = normalized.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4) return false;
+
+  const octets = ipv4.slice(1).map(Number);
+  if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) return true;
+
+  const first = octets[0]!;
+  const second = octets[1]!;
+  return (
+    first === 10 ||
+    first === 127 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 169 && second === 254) ||
+    first === 0
+  );
 }
