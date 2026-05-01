@@ -79,6 +79,20 @@ test("research task adds YouTube public video evidence when connector is availab
   assert.equal(brief.competitorPatterns[0]?.evidence[0]?.sourceUrl, "https://www.youtube.com/watch?v=video-1");
 });
 
+test("research task keeps all manual competitor URLs as evidence in fallback mode", async () => {
+  const brief = await runResearchTask({
+    goal: "Review DerbyUp competitors",
+    platforms: ["linkedin"],
+    brand,
+    manualSources: ["https://www.sport5.co.il/", "https://www.one.co.il/", "https://hapodium.com/"]
+  });
+
+  assert.deepEqual(
+    brief.marketSignals[0]?.evidence.map((item) => item.sourceUrl),
+    ["https://www.sport5.co.il/", "https://www.one.co.il/", "https://hapodium.com/"]
+  );
+});
+
 test("research task adds Serper public search evidence when connector is available", async () => {
   const brief = await runResearchTask({
     goal: "Create market proof content",

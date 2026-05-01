@@ -4,7 +4,7 @@ import { runSocialPipeline } from "@social-agents/agents";
 import { normalizeManualSourceUrls } from "@social-agents/shared";
 import type { AgentStatus, BrandGuideline, ContentAngle } from "@social-agents/shared";
 import { agentStore, agentStoreKind, isAgentStatus, parseAgentConfigUpdate } from "./agentStore.js";
-import { defaultBrand, defaultPlatforms } from "./defaults.js";
+import { defaultBrand, defaultCompetitorSources, defaultPlatforms } from "./defaults.js";
 import { readJson, sendError, sendJson } from "./http.js";
 import { runStore, storeKind } from "./runStore.js";
 import { getAgentSkill, listAgentSkills } from "./skillStore.js";
@@ -130,7 +130,10 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "POST" && url.pathname === "/api/runs") {
       const body = await readJson<CreateRunBody>(request);
-      const manualSources = normalizeManualSourceUrls(body.manualSources);
+      const manualSources = normalizeManualSourceUrls([
+        ...defaultCompetitorSources.map((source) => source.url),
+        ...(body.manualSources ?? [])
+      ]);
       if (manualSources.errors.length > 0) {
         sendJson(response, 400, { error: "Invalid manual sources.", details: manualSources.errors });
         return;

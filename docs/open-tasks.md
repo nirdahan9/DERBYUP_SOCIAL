@@ -15,6 +15,7 @@ Last updated: 2026-05-02
 - YouTube connector can feed public video evidence into Research Agent when `YOUTUBE_API_KEY` is configured.
 - `typecheck`, `build`, and `test` pass locally.
 - API supports per-agent status, model, and monthly budget updates.
+- DerbyUp default competitor sources are configured for Research Agent runs.
 
 ## Priority 0 - GitHub And Railway
 
@@ -73,6 +74,7 @@ Last updated: 2026-05-02
 - [x] Feed YouTube Data API evidence into Research Agent briefs.
 - [x] Add manual competitor URL ingestion.
 - [x] Validate manual research source URLs before creating a run.
+- [x] Configure DerbyUp default competitor source list.
 - [ ] Add uploaded screenshot/export ingestion.
 - [ ] Add Google Drive connector later.
 - [ ] Add UI for entering manual research sources before creating a run.

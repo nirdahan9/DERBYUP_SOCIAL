@@ -1,5 +1,12 @@
 import type { BrandGuideline, ContentAngle } from "@social-agents/shared";
 
+export interface CompetitorSource {
+  id: string;
+  name: string;
+  url: string;
+  notes: string;
+}
+
 export const defaultBrand: BrandGuideline = {
   id: "derbyup",
   name: "DerbyUp",
@@ -48,3 +55,36 @@ export const defaultBrand: BrandGuideline = {
 };
 
 export const defaultPlatforms: ContentAngle["platform"][] = ["linkedin", "instagram", "tiktok"];
+
+export const defaultCompetitorSources: CompetitorSource[] = [
+  {
+    id: "9cat",
+    name: "9 קטגוריות",
+    url: "https://9cat.co.il/en/basketball/nba-103",
+    notes: "Sports categories and prediction-style market/category browsing."
+  },
+  {
+    id: "sport5",
+    name: "ערוץ הספורט / Sport 5",
+    url: "https://www.sport5.co.il/",
+    notes: "Israeli sports news, live results, video, sports TV, and prediction-adjacent programming."
+  },
+  {
+    id: "one",
+    name: "ONE",
+    url: "https://www.one.co.il/",
+    notes: "Major Israeli sports portal with live results, video, league coverage, podcasts, and fantasy/prediction-adjacent content."
+  },
+  {
+    id: "sport1",
+    name: "ספורט 1 / Kicker",
+    url: "https://sport1.maariv.co.il/",
+    notes: "Israeli sports news, summaries, live results, video, and broadcast ecosystem."
+  },
+  {
+    id: "hapodium",
+    name: "הפודיום",
+    url: "https://hapodium.com/",
+    notes: "Sports podcast network, talent-led content, live events, social reach, and football fan community."
+  }
+];

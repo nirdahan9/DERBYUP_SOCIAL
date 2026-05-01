@@ -55,20 +55,17 @@ export async function runResearchTask(input: PipelineInput): Promise<ResearchBri
     return brief;
   }
 
-  const sourceUrl = input.manualSources?.[0] ?? "https://trends.google.com/trends/";
   const marketSignals: ResearchInsight[] = [
     {
       id: "signal-before-after",
       insight: "Audience-facing content should emphasize visible before/after transformation.",
       confidence: input.manualSources?.length ? "medium" : "hypothesis",
       evidence: input.manualSources?.length
-        ? [
-            {
-              sourceType: "manual_competitor_url",
-              sourceUrl,
-              evidenceNote: "Manual competitor source supplied for pattern analysis."
-            }
-          ]
+        ? input.manualSources.map((sourceUrl) => ({
+            sourceType: "manual_competitor_url",
+            sourceUrl,
+            evidenceNote: "Manual competitor source supplied for pattern analysis."
+          }))
         : [
             {
               sourceType: "hypothesis",

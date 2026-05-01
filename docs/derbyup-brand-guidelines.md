@@ -30,6 +30,18 @@ Users make predictions before kick-off, track results, climb the leaderboard, an
 - WhatsApp reminders, result summaries, and group notifications.
 - Hebrew social content for Instagram, TikTok, and LinkedIn.
 
+## Competitor And Reference Sources
+
+Use these sources as DerbyUp's default competitive landscape for Research Agent runs:
+
+- 9 קטגוריות: https://9cat.co.il/en/basketball/nba-103
+- ערוץ הספורט / Sport 5: https://www.sport5.co.il/
+- ONE: https://www.one.co.il/
+- ספורט 1 / Kicker: https://sport1.maariv.co.il/
+- הפודיום: https://hapodium.com/
+
+Research should use these sources to understand sports content formats, live-score behavior, prediction-adjacent language, fan-community hooks, podcast/talent-led sports media, and league/category browsing patterns. Do not copy claims or phrasing directly; extract patterns and source-backed insights.
+
 ## Voice
 
 - Hebrew-first.
