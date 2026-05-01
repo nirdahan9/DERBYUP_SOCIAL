@@ -33,7 +33,7 @@ Last updated: 2026-05-01
 - [x] Create initial schema for agents, skills, runs, tasks, events, assets, research sources, drafts, approvals, and brand guidelines.
 - [x] Seed default agent roster in migration.
 - [x] Add PostgreSQL store for runs, drafts, events, and approvals.
-- [ ] Add migration history table so future migrations are tracked safely.
+- [x] Add migration history table so future migrations are tracked safely.
 - [ ] Persist research evidence into `research_sources`, not only inside `runs.research_brief`.
 - [ ] Persist task-level records for each agent step.
 - [ ] Add DB-backed agent roster endpoint instead of returning static roster only.

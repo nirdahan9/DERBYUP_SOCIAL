@@ -1,9 +1,32 @@
-create type agent_status as enum ('enabled', 'disabled', 'paused');
-create type run_status as enum ('queued', 'running', 'awaiting_approval', 'completed', 'failed');
-create type task_status as enum ('queued', 'running', 'completed', 'failed', 'skipped');
-create type approval_status as enum ('pending', 'approved', 'rejected');
+do $$
+begin
+  create type agent_status as enum ('enabled', 'disabled', 'paused');
+exception
+  when duplicate_object then null;
+end $$;
 
-create table agents (
+do $$
+begin
+  create type run_status as enum ('queued', 'running', 'awaiting_approval', 'completed', 'failed');
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type task_status as enum ('queued', 'running', 'completed', 'failed', 'skipped');
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type approval_status as enum ('pending', 'approved', 'rejected');
+exception
+  when duplicate_object then null;
+end $$;
+
+create table if not exists agents (
   id text primary key,
   role text not null,
   title text not null,
@@ -17,7 +40,7 @@ create table agents (
   updated_at timestamptz not null default now()
 );
 
-create table skills (
+create table if not exists skills (
   id text primary key,
   title text not null,
   description text not null default '',
@@ -27,7 +50,7 @@ create table skills (
   updated_at timestamptz not null default now()
 );
 
-create table brand_guidelines (
+create table if not exists brand_guidelines (
   id text primary key,
   name text not null,
   voice jsonb not null default '[]'::jsonb,
@@ -41,7 +64,7 @@ create table brand_guidelines (
   updated_at timestamptz not null default now()
 );
 
-create table runs (
+create table if not exists runs (
   id text primary key,
   status run_status not null default 'queued',
   goal text not null,
@@ -51,7 +74,7 @@ create table runs (
   updated_at timestamptz not null default now()
 );
 
-create table tasks (
+create table if not exists tasks (
   id text primary key,
   run_id text not null references runs(id) on delete cascade,
   agent_id text not null references agents(id),
@@ -64,7 +87,7 @@ create table tasks (
   created_at timestamptz not null default now()
 );
 
-create table events (
+create table if not exists events (
   id text primary key,
   run_id text references runs(id) on delete cascade,
   agent_id text references agents(id),
@@ -74,7 +97,7 @@ create table events (
   created_at timestamptz not null default now()
 );
 
-create table assets (
+create table if not exists assets (
   id text primary key,
   kind text not null,
   source_type text not null,
@@ -84,7 +107,7 @@ create table assets (
   created_at timestamptz not null default now()
 );
 
-create table research_sources (
+create table if not exists research_sources (
   id text primary key,
   run_id text references runs(id) on delete cascade,
   source_type text not null,
@@ -99,7 +122,7 @@ create table research_sources (
   )
 );
 
-create table social_drafts (
+create table if not exists social_drafts (
   id text primary key,
   run_id text not null references runs(id) on delete cascade,
   platform text not null,
@@ -113,7 +136,7 @@ create table social_drafts (
   updated_at timestamptz not null default now()
 );
 
-create table approvals (
+create table if not exists approvals (
   id text primary key default ('approval_' || extract(epoch from clock_timestamp())::bigint || '_' || substr(md5(random()::text), 1, 8)),
   draft_id text not null references social_drafts(id) on delete cascade,
   status approval_status not null,
@@ -122,10 +145,10 @@ create table approvals (
   created_at timestamptz not null default now()
 );
 
-create index events_run_id_created_at_idx on events(run_id, created_at);
-create index tasks_run_id_idx on tasks(run_id);
-create index social_drafts_run_id_idx on social_drafts(run_id);
-create index research_sources_run_id_idx on research_sources(run_id);
+create index if not exists events_run_id_created_at_idx on events(run_id, created_at);
+create index if not exists tasks_run_id_idx on tasks(run_id);
+create index if not exists social_drafts_run_id_idx on social_drafts(run_id);
+create index if not exists research_sources_run_id_idx on research_sources(run_id);
 
 insert into agents (id, role, title, reports_to, status, budget_cents_monthly, model, capabilities, skill_path)
 values
