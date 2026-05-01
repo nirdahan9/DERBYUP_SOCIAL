@@ -6,6 +6,7 @@ import { agentStore, agentStoreKind } from "./agentStore.js";
 import { defaultBrand, defaultPlatforms } from "./defaults.js";
 import { readJson, sendError, sendJson } from "./http.js";
 import { runStore, storeKind } from "./runStore.js";
+import { getAgentSkill, listAgentSkills } from "./skillStore.js";
 
 interface CreateRunBody {
   goal?: string;
@@ -30,6 +31,26 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "GET" && url.pathname === "/api/agents") {
       sendJson(response, 200, { agents: await agentStore.listAgents(), store: agentStoreKind });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/skills") {
+      sendJson(response, 200, { skills: await listAgentSkills() });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname.startsWith("/api/skills/")) {
+      const agentId = url.pathname.split("/")[3];
+      if (!agentId) {
+        sendJson(response, 400, { error: "Missing agent id." });
+        return;
+      }
+      const skill = await getAgentSkill(agentId);
+      if (!skill) {
+        sendJson(response, 404, { error: "Skill not found." });
+        return;
+      }
+      sendJson(response, 200, { skill });
       return;
     }
 
