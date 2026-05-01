@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { AgentLlmProvider } from "./llmProvider.js";
 import { runBrandReviewTask, runCreativeTask, runResearchTask, runStrategyTask, type PipelineInput } from "./taskRunner.js";
+import type { SerperSearchResult } from "./serperConnector.js";
+import type { YouTubeSearchVideo } from "./youtubeConnector.js";
 
 const brand: PipelineInput["brand"] = {
   id: "brand",
@@ -52,6 +54,139 @@ test("research task can run through an injected LLM provider", async () => {
 
   assert.equal(brief.marketSignals[0]?.id, "signal-1");
   assert.match(provider.prompts[0] ?? "", /Create a content pack/);
+});
+
+test("research task adds YouTube public video evidence when connector is available", async () => {
+  const brief = await runResearchTask({
+    goal: "Create short proof videos",
+    platforms: ["youtube_shorts", "tiktok"],
+    brand,
+    youtubeConnector: new StaticYouTubeConnector([
+      {
+        videoId: "video-1",
+        title: "Before and after proof in 20 seconds",
+        description: "Example format",
+        channelId: "channel-1",
+        channelTitle: "Competitor",
+        publishedAt: "2026-04-01T08:00:00Z",
+        sourceUrl: "https://www.youtube.com/watch?v=video-1"
+      }
+    ])
+  });
+
+  assert.equal(brief.competitorPatterns[0]?.id, "youtube-public-video-patterns");
+  assert.equal(brief.competitorPatterns[0]?.evidence[0]?.sourceType, "youtube_api");
+  assert.equal(brief.competitorPatterns[0]?.evidence[0]?.sourceUrl, "https://www.youtube.com/watch?v=video-1");
+});
+
+test("research task adds Serper public search evidence when connector is available", async () => {
+  const brief = await runResearchTask({
+    goal: "Create market proof content",
+    platforms: ["linkedin"],
+    brand,
+    serperConnector: new StaticSerperConnector([
+      {
+        title: "Market proof examples",
+        link: "https://example.com/market-proof",
+        snippet: "A useful public search result.",
+        position: 1
+      }
+    ])
+  });
+
+  assert.equal(brief.marketSignals.some((insight) => insight.id === "serper-public-search-signals"), true);
+  const signal = brief.marketSignals.find((insight) => insight.id === "serper-public-search-signals");
+  assert.equal(signal?.evidence[0]?.sourceType, "serper_search");
+  assert.equal(signal?.evidence[0]?.sourceUrl, "https://example.com/market-proof");
+});
+
+test("research task passes YouTube signals into LLM prompts and still keeps evidence in the brief", async () => {
+  const provider = new StaticProvider({
+    marketSignals: [],
+    audienceInsights: [],
+    competitorPatterns: [],
+    riskFlags: [],
+    platformNotes: {}
+  });
+
+  const brief = await runResearchTask({
+    goal: "Create short proof videos",
+    platforms: ["youtube_shorts"],
+    brand,
+    llmProvider: provider,
+    youtubeConnector: new StaticYouTubeConnector([
+      {
+        videoId: "video-2",
+        title: "Three hooks that create trust",
+        description: "Example format",
+        channelId: "channel-2",
+        channelTitle: "Public Channel",
+        publishedAt: "2026-04-02T08:00:00Z",
+        sourceUrl: "https://www.youtube.com/watch?v=video-2"
+      }
+    ])
+  });
+
+  assert.match(provider.prompts[0] ?? "", /YouTube public video signals JSON/);
+  assert.match(provider.prompts[0] ?? "", /Three hooks that create trust/);
+  assert.equal(brief.competitorPatterns[0]?.evidence[0]?.sourceType, "youtube_api");
+});
+
+test("research task passes Serper signals into LLM prompts and still keeps evidence in the brief", async () => {
+  const provider = new StaticProvider({
+    marketSignals: [],
+    audienceInsights: [],
+    competitorPatterns: [],
+    riskFlags: [],
+    platformNotes: {}
+  });
+
+  const brief = await runResearchTask({
+    goal: "Create market proof content",
+    platforms: ["linkedin"],
+    brand,
+    llmProvider: provider,
+    serperConnector: new StaticSerperConnector([
+      {
+        title: "Public proof source",
+        link: "https://example.com/public-proof",
+        snippet: "A useful public search result.",
+        position: 2
+      }
+    ])
+  });
+
+  assert.match(provider.prompts[0] ?? "", /Serper public search signals JSON/);
+  assert.match(provider.prompts[0] ?? "", /Public proof source/);
+  assert.equal(brief.marketSignals.find((insight) => insight.id === "serper-public-search-signals")?.evidence[0]?.sourceType, "serper_search");
+});
+
+test("research task records YouTube connector errors as hypothesis risk flags", async () => {
+  const brief = await runResearchTask({
+    goal: "Create content pack",
+    platforms: ["linkedin"],
+    brand,
+    youtubeConnector: new FailingYouTubeConnector("quota exceeded")
+  });
+
+  const risk = brief.riskFlags.find((insight) => insight.id === "youtube-connector-error");
+
+  assert.equal(risk?.confidence, "hypothesis");
+  assert.match(risk?.evidence[0]?.evidenceNote ?? "", /quota exceeded/);
+});
+
+test("research task records Serper connector errors as hypothesis risk flags", async () => {
+  const brief = await runResearchTask({
+    goal: "Create content pack",
+    platforms: ["linkedin"],
+    brand,
+    serperConnector: new FailingSerperConnector("invalid api key")
+  });
+
+  const risk = brief.riskFlags.find((insight) => insight.id === "serper-connector-error");
+
+  assert.equal(risk?.confidence, "hypothesis");
+  assert.match(risk?.evidence[0]?.evidenceNote ?? "", /invalid api key/);
 });
 
 test("strategy, creative, and brand tasks can use injected LLM JSON", async () => {
@@ -106,5 +241,37 @@ class StaticProvider implements AgentLlmProvider {
   async generateJson<T>(request: { prompt: string }): Promise<T> {
     this.prompts.push(request.prompt);
     return this.value as T;
+  }
+}
+
+class StaticSerperConnector {
+  constructor(private readonly results: SerperSearchResult[]) {}
+
+  async search(): Promise<SerperSearchResult[]> {
+    return this.results;
+  }
+}
+
+class StaticYouTubeConnector {
+  constructor(private readonly videos: YouTubeSearchVideo[]) {}
+
+  async searchVideos(): Promise<YouTubeSearchVideo[]> {
+    return this.videos;
+  }
+}
+
+class FailingSerperConnector {
+  constructor(private readonly message: string) {}
+
+  async search(): Promise<never> {
+    throw new Error(this.message);
+  }
+}
+
+class FailingYouTubeConnector {
+  constructor(private readonly message: string) {}
+
+  async searchVideos(): Promise<never> {
+    throw new Error(this.message);
   }
 }

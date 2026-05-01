@@ -4,9 +4,20 @@ import {
   type BrandReview,
   type ContentAngle,
   type ResearchBrief,
+  type ResearchInsight,
   type SocialDraft
 } from "@social-agents/shared";
 import { createDefaultLlmProvider, type AgentLlmProvider } from "./llmProvider.js";
+import { createDefaultSerperConnector, serperResultToEvidence, type SerperSearchResult } from "./serperConnector.js";
+import { createDefaultYouTubeConnector, youtubeVideoToEvidence, type YouTubeSearchVideo } from "./youtubeConnector.js";
+
+export interface SerperResearchConnector {
+  search(query: string, options?: { num?: number; gl?: string; hl?: string }): Promise<SerperSearchResult[]>;
+}
+
+export interface YouTubeResearchConnector {
+  searchVideos(query: string, options?: { maxResults?: number }): Promise<YouTubeSearchVideo[]>;
+}
 
 export interface PipelineInput {
   goal: string;
@@ -14,10 +25,15 @@ export interface PipelineInput {
   brand: BrandGuideline;
   manualSources?: string[];
   llmProvider?: AgentLlmProvider;
+  serperConnector?: SerperResearchConnector;
+  youtubeConnector?: YouTubeResearchConnector;
 }
 
 export async function runResearchTask(input: PipelineInput): Promise<ResearchBrief> {
   const provider = input.llmProvider ?? createDefaultLlmProvider();
+  const serperSignals = await collectSerperSignals(input);
+  const youtubeSignals = await collectYouTubeSignals(input);
+
   if (provider) {
     const brief = await provider.generateJson<ResearchBrief>({
       system: "You are the Research Agent for a social media control plane. Produce evidence-aware research only.",
@@ -25,40 +41,50 @@ export async function runResearchTask(input: PipelineInput): Promise<ResearchBri
         `Goal: ${input.goal}`,
         `Platforms: ${input.platforms.join(", ")}`,
         `Manual sources: ${(input.manualSources ?? []).join(", ") || "none"}`,
+        `Serper public search signals JSON: ${JSON.stringify(serperSignals.results)}`,
+        `YouTube public video signals JSON: ${JSON.stringify(youtubeSignals.videos)}`,
         "Return a ResearchBrief JSON object with marketSignals, audienceInsights, competitorPatterns, riskFlags, and platformNotes.",
         "Every insight must include id, insight, confidence, evidence, and recommendedAction.",
         "If no concrete source exists, use confidence \"hypothesis\" and sourceType \"hypothesis\"."
       ].join("\n")
     });
 
+    applySerperSignals(brief, serperSignals);
+    applyYouTubeSignals(brief, youtubeSignals);
     validateResearchBrief(brief);
     return brief;
   }
 
   const sourceUrl = input.manualSources?.[0] ?? "https://trends.google.com/trends/";
+  const marketSignals: ResearchInsight[] = [
+    {
+      id: "signal-before-after",
+      insight: "Audience-facing content should emphasize visible before/after transformation.",
+      confidence: input.manualSources?.length ? "medium" : "hypothesis",
+      evidence: input.manualSources?.length
+        ? [
+            {
+              sourceType: "manual_competitor_url",
+              sourceUrl,
+              evidenceNote: "Manual competitor source supplied for pattern analysis."
+            }
+          ]
+        : [
+            {
+              sourceType: "hypothesis",
+              evidenceNote: "No concrete external source was supplied; treat this as a hypothesis for review."
+            }
+          ],
+      recommendedAction: "Create one post that demonstrates the transformation in the first three seconds."
+    }
+  ];
+
+  if (serperSignals.results.length) {
+    marketSignals.push(createSerperMarketSignal(serperSignals.results));
+  }
+
   const brief: ResearchBrief = {
-    marketSignals: [
-      {
-        id: "signal-before-after",
-        insight: "Audience-facing content should emphasize visible before/after transformation.",
-        confidence: input.manualSources?.length ? "medium" : "hypothesis",
-        evidence: input.manualSources?.length
-          ? [
-              {
-                sourceType: "manual_competitor_url",
-                sourceUrl,
-                evidenceNote: "Manual competitor source supplied for pattern analysis."
-              }
-            ]
-          : [
-              {
-                sourceType: "hypothesis",
-                evidenceNote: "No concrete external source was supplied; treat this as a hypothesis for review."
-              }
-            ],
-        recommendedAction: "Create one post that demonstrates the transformation in the first three seconds."
-      }
-    ],
+    marketSignals,
     audienceInsights: [
       {
         id: "audience-clarity",
@@ -73,7 +99,7 @@ export async function runResearchTask(input: PipelineInput): Promise<ResearchBri
         recommendedAction: "Use a specific pain point and one measurable outcome in the caption."
       }
     ],
-    competitorPatterns: [],
+    competitorPatterns: youtubeSignals.videos.length ? [createYouTubeCompetitorPattern(youtubeSignals.videos)] : [],
     riskFlags: [
       {
         id: "risk-unverified-claims",
@@ -92,9 +118,9 @@ export async function runResearchTask(input: PipelineInput): Promise<ResearchBri
     platformNotes: Object.fromEntries(input.platforms.map((platform) => [platform, ["Lead with a hook, proof, and a single CTA."]]))
   };
 
-  for (const section of [brief.marketSignals, brief.audienceInsights, brief.competitorPatterns, brief.riskFlags]) {
-    for (const insight of section) assertValidResearchInsight(insight);
-  }
+  applySerperSignals(brief, serperSignals);
+  applyYouTubeSignals(brief, youtubeSignals);
+  validateResearchBrief(brief);
 
   return brief;
 }
@@ -220,4 +246,114 @@ function validateResearchBrief(brief: ResearchBrief): void {
   for (const section of [brief.marketSignals, brief.audienceInsights, brief.competitorPatterns, brief.riskFlags]) {
     for (const insight of section) assertValidResearchInsight(insight);
   }
+}
+
+async function collectSerperSignals(input: PipelineInput): Promise<{ results: SerperSearchResult[]; error?: string }> {
+  const connector = input.serperConnector ?? createDefaultSerperConnector();
+  if (!connector) return { results: [] };
+
+  try {
+    const results = await connector.search(input.goal, { num: 5, gl: "il", hl: "he" });
+    return { results };
+  } catch (error) {
+    return {
+      results: [],
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+async function collectYouTubeSignals(input: PipelineInput): Promise<{ videos: YouTubeSearchVideo[]; error?: string }> {
+  const connector = input.youtubeConnector ?? createDefaultYouTubeConnector();
+  if (!connector) return { videos: [] };
+
+  try {
+    const videos = await connector.searchVideos(input.goal, { maxResults: 5 });
+    return { videos };
+  } catch (error) {
+    return {
+      videos: [],
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+function applySerperSignals(brief: ResearchBrief, signals: { results: SerperSearchResult[]; error?: string }): void {
+  if (signals.results.length && !brief.marketSignals.some((insight) => insight.id === "serper-public-search-signals")) {
+    brief.marketSignals.push(createSerperMarketSignal(signals.results));
+  }
+
+  if (signals.error && !brief.riskFlags.some((insight) => insight.id === "serper-connector-error")) {
+    brief.riskFlags.push({
+      id: "serper-connector-error",
+      insight: "Public search research could not be collected through Serper for this run.",
+      confidence: "hypothesis",
+      evidence: [
+        {
+          sourceType: "hypothesis",
+          evidenceNote: `Serper connector error: ${signals.error}`
+        }
+      ],
+      recommendedAction: "Review the Serper API key, quota, and query settings before relying on public search signals."
+    });
+  }
+}
+
+function applyYouTubeSignals(brief: ResearchBrief, signals: { videos: YouTubeSearchVideo[]; error?: string }): void {
+  if (signals.videos.length && !brief.competitorPatterns.some((insight) => insight.id === "youtube-public-video-patterns")) {
+    brief.competitorPatterns.push(createYouTubeCompetitorPattern(signals.videos));
+  }
+
+  if (signals.error && !brief.riskFlags.some((insight) => insight.id === "youtube-connector-error")) {
+    brief.riskFlags.push({
+      id: "youtube-connector-error",
+      insight: "YouTube public video research could not be collected for this run.",
+      confidence: "hypothesis",
+      evidence: [
+        {
+          sourceType: "hypothesis",
+          evidenceNote: `YouTube connector error: ${signals.error}`
+        }
+      ],
+      recommendedAction: "Review the YouTube API key, quota, and query settings before relying on YouTube competitor signals."
+    });
+  }
+}
+
+function createSerperMarketSignal(results: SerperSearchResult[]) {
+  const titles = results
+    .slice(0, 3)
+    .map((result) => result.title)
+    .filter(Boolean);
+
+  return {
+    id: "serper-public-search-signals",
+    insight: titles.length
+      ? `Public search results around this goal include sources such as: ${titles.join(" | ")}.`
+      : "Public search results are available for this goal, but titles were missing from the API response.",
+    confidence: "medium" as const,
+    evidence: results.map((result) =>
+      serperResultToEvidence(result, `Serper public search result${result.position ? ` at position ${result.position}` : ""}.`)
+    ),
+    recommendedAction: "Use these public search sources to ground market context, questions, and claims before creating content angles."
+  };
+}
+
+function createYouTubeCompetitorPattern(videos: YouTubeSearchVideo[]) {
+  const titles = videos
+    .slice(0, 3)
+    .map((video) => video.title)
+    .filter(Boolean);
+
+  return {
+    id: "youtube-public-video-patterns",
+    insight: titles.length
+      ? `Public YouTube results around this goal include titles such as: ${titles.join(" | ")}.`
+      : "Public YouTube results are available for this goal, but titles were missing from the API response.",
+    confidence: "medium" as const,
+    evidence: videos.map((video) =>
+      youtubeVideoToEvidence(video, `YouTube Data API v3 result from channel "${video.channelTitle || "unknown"}".`)
+    ),
+    recommendedAction: "Use these public video titles as inspiration for hooks and formats, but verify relevance before treating them as competitor proof."
+  };
 }
