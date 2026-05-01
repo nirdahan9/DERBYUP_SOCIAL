@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
 import { URL } from "node:url";
-import { defaultAgentRoster, runSocialPipeline } from "@social-agents/agents";
+import { runSocialPipeline } from "@social-agents/agents";
 import type { BrandGuideline, ContentAngle } from "@social-agents/shared";
+import { agentStore, agentStoreKind } from "./agentStore.js";
 import { defaultBrand, defaultPlatforms } from "./defaults.js";
 import { readJson, sendError, sendJson } from "./http.js";
 import { runStore, storeKind } from "./runStore.js";
@@ -28,7 +29,7 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && url.pathname === "/api/agents") {
-      sendJson(response, 200, { agents: defaultAgentRoster });
+      sendJson(response, 200, { agents: await agentStore.listAgents(), store: agentStoreKind });
       return;
     }
 

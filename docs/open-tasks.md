@@ -36,7 +36,7 @@ Last updated: 2026-05-01
 - [x] Add migration history table so future migrations are tracked safely.
 - [x] Persist research evidence into `research_sources`, not only inside `runs.research_brief`.
 - [x] Persist task-level records for each agent step.
-- [ ] Add DB-backed agent roster endpoint instead of returning static roster only.
+- [x] Add DB-backed agent roster endpoint instead of returning static roster only.
 
 ## Priority 2 - Agent System
 
