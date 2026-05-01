@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import type { AgentEvent, ApprovalStatus, PipelineRun, SocialDraft } from "@social-agents/shared";
+import { collectResearchSourceRecords } from "./researchSources.js";
 import type { RunStore } from "./store.js";
 
 interface RunRow {
@@ -73,6 +74,18 @@ export class PostgresStore implements RunStore {
         `,
         [run.id, run.status, run.goal, {}, run.researchBrief ?? null, run.createdAt, run.updatedAt]
       );
+
+      await client.query("delete from research_sources where run_id = $1", [run.id]);
+      const researchSources = collectResearchSourceRecords(run.id, run.researchBrief);
+      for (const source of researchSources) {
+        await client.query(
+          `
+            insert into research_sources (id, run_id, source_type, source_url, uploaded_asset_id, evidence_note)
+            values ($1, $2, $3, $4, $5, $6)
+          `,
+          [source.id, source.runId, source.sourceType, source.sourceUrl ?? null, source.uploadedAssetId ?? null, source.evidenceNote]
+        );
+      }
 
       for (const draft of run.drafts) {
         await client.query(

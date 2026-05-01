@@ -34,7 +34,7 @@ Last updated: 2026-05-01
 - [x] Seed default agent roster in migration.
 - [x] Add PostgreSQL store for runs, drafts, events, and approvals.
 - [x] Add migration history table so future migrations are tracked safely.
-- [ ] Persist research evidence into `research_sources`, not only inside `runs.research_brief`.
+- [x] Persist research evidence into `research_sources`, not only inside `runs.research_brief`.
 - [ ] Persist task-level records for each agent step.
 - [ ] Add DB-backed agent roster endpoint instead of returning static roster only.
 
