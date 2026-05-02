@@ -15,6 +15,7 @@
     ]
   },
   "deploy": {
+    "preDeployCommand": "corepack pnpm --filter @social-agents/api db:migrate",
     "startCommand": "corepack pnpm --filter @social-agents/api start",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 120,
