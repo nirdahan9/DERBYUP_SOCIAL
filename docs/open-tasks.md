@@ -16,6 +16,7 @@ Last updated: 2026-05-02
 - `typecheck`, `build`, and `test` pass locally.
 - API supports per-agent status, model, and monthly budget updates.
 - DerbyUp default competitor sources are configured for Research Agent runs.
+- Stitch design brief exists for the first professional RTL admin UI.
 
 ## Priority 0 - GitHub And Railway
 
@@ -95,6 +96,7 @@ Last updated: 2026-05-02
 ## Priority 5 - Admin UI
 
 - [x] Create first dashboard with agent roster, runs, research brief, drafts, and events.
+- [x] Add Stitch design brief for DerbyUp RTL admin UI.
 - [ ] Add form for custom campaign goal.
 - [ ] Add platform selector.
 - [ ] Add manual source URL input.
