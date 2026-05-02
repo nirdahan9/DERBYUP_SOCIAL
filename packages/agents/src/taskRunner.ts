@@ -54,6 +54,7 @@ export async function runResearchTask(input: PipelineInput): Promise<ResearchBri
     });
     const brief = normalizeResearchBrief(rawBrief, input.platforms);
 
+    applyManualSourceSignals(brief, input.manualSources);
     applySerperSignals(brief, serperSignals);
     applyYouTubeSignals(brief, youtubeSignals);
     validateResearchBrief(brief);
@@ -420,7 +421,12 @@ async function collectSerperSignals(input: PipelineInput): Promise<{ results: Se
   if (!connector) return { results: [] };
 
   try {
-    const results = await connector.search(input.goal, { num: 5, gl: "il", hl: "he" });
+    const results = await searchFirstNonEmpty((query) => connector.search(query, { num: 5, gl: "il", hl: "he" }), [
+      input.goal,
+      `${input.brand.name} football prediction private league`,
+      "football prediction app private league social sports",
+      "sports prediction social league friends leaderboard"
+    ]);
     return { results };
   } catch (error) {
     return {
@@ -435,7 +441,12 @@ async function collectYouTubeSignals(input: PipelineInput): Promise<{ videos: Yo
   if (!connector) return { videos: [] };
 
   try {
-    const videos = await connector.searchVideos(input.goal, { maxResults: 5 });
+    const videos = await searchFirstNonEmpty((query) => connector.searchVideos(query, { maxResults: 5 }), [
+      input.goal,
+      `${input.brand.name} football prediction private league`,
+      "football prediction app private league",
+      "fantasy football friends leaderboard"
+    ]);
     return { videos };
   } catch (error) {
     return {
@@ -443,6 +454,30 @@ async function collectYouTubeSignals(input: PipelineInput): Promise<{ videos: Yo
       error: error instanceof Error ? error.message : String(error)
     };
   }
+}
+
+async function searchFirstNonEmpty<T>(search: (query: string) => Promise<T[]>, queries: string[]): Promise<T[]> {
+  for (const query of queries) {
+    const results = await search(query);
+    if (results.length > 0) return results;
+  }
+  return [];
+}
+
+function applyManualSourceSignals(brief: ResearchBrief, manualSources: string[] | undefined): void {
+  if (!manualSources?.length || brief.marketSignals.some((insight) => insight.id === "manual-competitor-sources")) return;
+
+  brief.marketSignals.push({
+    id: "manual-competitor-sources",
+    insight: "Operator-approved competitor and reference sources are available for pattern analysis.",
+    confidence: "medium",
+    evidence: manualSources.map((sourceUrl) => ({
+      sourceType: "manual_competitor_url",
+      sourceUrl,
+      evidenceNote: "Approved manual competitor or reference source supplied for this DerbyUp research run."
+    })),
+    recommendedAction: "Use these sources to compare hooks, formats, navigation patterns, and sports-community framing before approving drafts."
+  });
 }
 
 function applySerperSignals(brief: ResearchBrief, signals: { results: SerperSearchResult[]; error?: string }): void {

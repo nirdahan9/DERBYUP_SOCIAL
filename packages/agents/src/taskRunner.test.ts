@@ -96,6 +96,71 @@ test("research task normalizes snake_case and missing LLM evidence fields", asyn
   assert.match(brief.marketSignals[0]?.evidence[1]?.evidenceNote ?? "", /missing/i);
 });
 
+test("research task keeps manual sources and falls back to concise connector queries with LLM provider", async () => {
+  const provider = new StaticProvider({
+    marketSignals: [],
+    audienceInsights: [],
+    competitorPatterns: [],
+    riskFlags: [],
+    platformNotes: {}
+  });
+  const serper = new StaticSerperConnector([
+    [],
+    [
+      {
+        title: "Private league football predictions",
+        link: "https://example.com/private-league",
+        snippet: "Social football prediction format.",
+        position: 1
+      }
+    ]
+  ]);
+  const youtube = new StaticYouTubeConnector([
+    [],
+    [
+      {
+        videoId: "video-fallback",
+        title: "Football prediction league hooks",
+        description: "Example format",
+        channelId: "channel-fallback",
+        channelTitle: "Sports Creator",
+        publishedAt: "2026-04-02T08:00:00Z",
+        sourceUrl: "https://www.youtube.com/watch?v=video-fallback"
+      }
+    ]
+  ]);
+
+  const brief = await runResearchTask({
+    goal: "צור קמפיין בעברית עם שאילתה ארוכה מאוד",
+    platforms: ["instagram"],
+    brand,
+    manualSources: ["https://www.sport5.co.il/"],
+    llmProvider: provider,
+    serperConnector: serper,
+    youtubeConnector: youtube
+  });
+
+  assert.equal(serper.queries.length, 2);
+  assert.equal(youtube.queries.length, 2);
+  assert.equal(brief.marketSignals.find((insight) => insight.id === "manual-competitor-sources")?.evidence[0]?.sourceType, "manual_competitor_url");
+  assert.equal(brief.marketSignals.find((insight) => insight.id === "serper-public-search-signals")?.evidence[0]?.sourceUrl, "https://example.com/private-league");
+  assert.equal(brief.competitorPatterns.find((insight) => insight.id === "youtube-public-video-patterns")?.evidence[0]?.sourceType, "youtube_api");
+});
+
+test("research task returns empty connector results only after fallback queries are exhausted", async () => {
+  const serper = new StaticSerperConnector([[], [], [], []]);
+
+  const brief = await runResearchTask({
+    goal: "No matching signal",
+    platforms: ["linkedin"],
+    brand,
+    serperConnector: serper
+  });
+
+  assert.equal(serper.queries.length, 4);
+  assert.equal(brief.marketSignals.some((insight) => insight.id === "serper-public-search-signals"), false);
+});
+
 test("research task adds YouTube public video evidence when connector is available", async () => {
   const brief = await runResearchTask({
     goal: "Create short proof videos",
@@ -342,18 +407,32 @@ class StaticProvider implements AgentLlmProvider {
 }
 
 class StaticSerperConnector {
-  constructor(private readonly results: SerperSearchResult[]) {}
+  readonly queries: string[] = [];
+  private index = 0;
 
-  async search(): Promise<SerperSearchResult[]> {
-    return this.results;
+  constructor(private readonly results: SerperSearchResult[] | SerperSearchResult[][]) {}
+
+  async search(query: string): Promise<SerperSearchResult[]> {
+    this.queries.push(query);
+    if (this.results.every(Array.isArray)) {
+      return (this.results as SerperSearchResult[][])[this.index++] ?? [];
+    }
+    return this.results as SerperSearchResult[];
   }
 }
 
 class StaticYouTubeConnector {
-  constructor(private readonly videos: YouTubeSearchVideo[]) {}
+  readonly queries: string[] = [];
+  private index = 0;
 
-  async searchVideos(): Promise<YouTubeSearchVideo[]> {
-    return this.videos;
+  constructor(private readonly videos: YouTubeSearchVideo[] | YouTubeSearchVideo[][]) {}
+
+  async searchVideos(query: string): Promise<YouTubeSearchVideo[]> {
+    this.queries.push(query);
+    if (this.videos.every(Array.isArray)) {
+      return (this.videos as YouTubeSearchVideo[][])[this.index++] ?? [];
+    }
+    return this.videos as YouTubeSearchVideo[];
   }
 }
 
