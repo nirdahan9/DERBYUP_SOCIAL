@@ -400,7 +400,7 @@ function normalizeVideoSpec(value: unknown, angle: ContentAngle, brand: BrandGui
     fps: 30,
     durationSeconds: numberField(record.durationSeconds ?? record.duration_seconds, 18),
     title: stringField(record.title, angle.title),
-    captions: Array.isArray(record.captions) ? record.captions.map((item) => String(item)).filter(Boolean) : [angle.hook, angle.cta],
+    captions: normalizeCaptionArray(record.captions, [angle.hook, angle.cta]),
     cta: stringField(record.cta, angle.cta),
     brand
   };
@@ -543,6 +543,19 @@ function numberField(value: unknown, fallback: number): number {
 
 function normalizeStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+}
+
+function normalizeCaptionArray(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value)) return fallback;
+  const captions = value.map(captionText).filter((item): item is string => Boolean(item));
+  return captions.length ? captions : fallback;
+}
+
+function captionText(value: unknown): string | undefined {
+  if (typeof value === "string") return value.trim() || undefined;
+  const record = asRecord(value);
+  if (!record) return undefined;
+  return optionalStringField(record.text ?? record.caption ?? record.title ?? record.value);
 }
 
 function normalizeConfidence(value: unknown, fallback: Confidence): Confidence {

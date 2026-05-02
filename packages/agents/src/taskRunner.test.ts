@@ -305,7 +305,11 @@ test("strategy, creative, and brand tasks normalize partial LLM JSON", async () 
     brand,
     new StaticProvider({
       caption: "  נועלים תחזית לפני השריקה  ",
-      image_prompt: "  Matchday leaderboard visual  "
+      image_prompt: "  Matchday leaderboard visual  ",
+      video_spec: {
+        duration_seconds: 12,
+        captions: [{ text: "פותחים ליגה" }, { caption: "מזמינים חברים" }]
+      }
     })
   );
 
@@ -321,6 +325,7 @@ test("strategy, creative, and brand tasks normalize partial LLM JSON", async () 
   assert.equal(creative.caption, "נועלים תחזית לפני השריקה");
   assert.equal(creative.hook, "מי באמת מבין כדורגל?");
   assert.equal(creative.imagePrompt, "Matchday leaderboard visual");
+  assert.deepEqual(creative.videoSpec?.captions, ["פותחים ליגה", "מזמינים חברים"]);
   assert.equal(review.passed, false);
   assert.deepEqual(review.requiredEdits, ["Add no-money-gambling clarity"]);
 });
