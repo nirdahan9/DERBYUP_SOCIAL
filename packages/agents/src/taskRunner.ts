@@ -2,9 +2,13 @@ import {
   assertValidResearchInsight,
   type BrandGuideline,
   type BrandReview,
+  type Confidence,
   type ContentAngle,
   type ResearchBrief,
+  type ResearchEvidence,
   type ResearchInsight,
+  type ResearchSourceType,
+  type ShortVideoRenderSpec,
   type SocialDraft
 } from "@social-agents/shared";
 import { createDefaultLlmProvider, type AgentLlmProvider } from "./llmProvider.js";
@@ -35,7 +39,7 @@ export async function runResearchTask(input: PipelineInput): Promise<ResearchBri
   const youtubeSignals = await collectYouTubeSignals(input);
 
   if (provider) {
-    const brief = await provider.generateJson<ResearchBrief>({
+    const rawBrief = await provider.generateJson<unknown>({
       system: "You are the Research Agent for a social media control plane. Produce evidence-aware research only.",
       prompt: [
         `Goal: ${input.goal}`,
@@ -48,6 +52,7 @@ export async function runResearchTask(input: PipelineInput): Promise<ResearchBri
         "If no concrete source exists, use confidence \"hypothesis\" and sourceType \"hypothesis\"."
       ].join("\n")
     });
+    const brief = normalizeResearchBrief(rawBrief, input.platforms);
 
     applySerperSignals(brief, serperSignals);
     applyYouTubeSignals(brief, youtubeSignals);
@@ -128,7 +133,7 @@ export async function runStrategyTask(
   provider: AgentLlmProvider | undefined = createDefaultLlmProvider()
 ): Promise<ContentAngle[]> {
   if (provider) {
-    return provider.generateJson<ContentAngle[]>({
+    const rawAngles = await provider.generateJson<unknown>({
       system: "You are the Strategy Agent. Convert research into platform-specific social content angles.",
       prompt: [
         `Platforms: ${platforms.join(", ")}`,
@@ -137,6 +142,7 @@ export async function runStrategyTask(
         "Each object must include id, title, platform, hook, format, cta, and sourceInsightIds."
       ].join("\n")
     });
+    return normalizeContentAngles(rawAngles, platforms);
   }
 
   return platforms.map((platform, index) => ({
@@ -160,7 +166,7 @@ export async function runBrandReviewTask(
   provider: AgentLlmProvider | undefined = createDefaultLlmProvider()
 ): Promise<BrandReview> {
   if (provider) {
-    return provider.generateJson<BrandReview>({
+    const rawReview = await provider.generateJson<unknown>({
       system: "You are the Brand Guideline Agent. Review content for tone, claims, banned language, and brand fit.",
       prompt: [
         `Brand guideline JSON: ${JSON.stringify(brand)}`,
@@ -169,6 +175,7 @@ export async function runBrandReviewTask(
         "Return a BrandReview JSON object with passed, notes, and requiredEdits."
       ].join("\n")
     });
+    return normalizeBrandReview(rawReview);
   }
 
   const requiredEdits: string[] = [];
@@ -204,7 +211,7 @@ export async function runCreativeTask(
   provider: AgentLlmProvider | undefined = createDefaultLlmProvider()
 ): Promise<Pick<SocialDraft, "caption" | "hook" | "imagePrompt" | "videoSpec">> {
   if (provider) {
-    return provider.generateJson<Pick<SocialDraft, "caption" | "hook" | "imagePrompt" | "videoSpec">>({
+    const rawCreative = await provider.generateJson<unknown>({
       system: "You are the Creative Content Agent. Write Hebrew social content and visual/video direction.",
       prompt: [
         `Content angle JSON: ${JSON.stringify(angle)}`,
@@ -213,6 +220,7 @@ export async function runCreativeTask(
         "If videoSpec is included, it must match width 1080, height 1920, fps 30, durationSeconds, title, captions, cta, and brand."
       ].join("\n")
     });
+    return normalizeCreativeDraft(rawCreative, angle, brand);
   }
 
   const caption = `${angle.hook}\n\nבמקום עוד פוסט כללי, זה כיוון שמבוסס על אות מחקרי ומותאם ל-${angle.platform}.\n\n${angle.cta}`;
@@ -243,6 +251,168 @@ function validateResearchBrief(brief: ResearchBrief): void {
   for (const section of [brief.marketSignals, brief.audienceInsights, brief.competitorPatterns, brief.riskFlags]) {
     for (const insight of section) assertValidResearchInsight(insight);
   }
+}
+
+function normalizeResearchBrief(value: unknown, platforms: ContentAngle["platform"][]): ResearchBrief {
+  const record = asRecord(value);
+  return {
+    marketSignals: normalizeResearchInsights(record?.marketSignals),
+    audienceInsights: normalizeResearchInsights(record?.audienceInsights),
+    competitorPatterns: normalizeResearchInsights(record?.competitorPatterns),
+    riskFlags: normalizeResearchInsights(record?.riskFlags),
+    platformNotes: normalizePlatformNotes(record?.platformNotes, platforms)
+  };
+}
+
+function normalizeResearchInsights(value: unknown): ResearchInsight[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => normalizeResearchInsight(item, index)).filter((item): item is ResearchInsight => Boolean(item));
+}
+
+function normalizeResearchInsight(value: unknown, index: number): ResearchInsight | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+
+  const evidence = normalizeResearchEvidenceList(record.evidence);
+  const hasConcreteEvidence = evidence.some((item) => item.sourceType !== "hypothesis");
+  const confidence = normalizeConfidence(record.confidence, hasConcreteEvidence ? "medium" : "hypothesis");
+
+  return {
+    id: stringField(record.id, `llm-insight-${index + 1}`),
+    insight: stringField(record.insight, "LLM returned an insight without text; review this item manually."),
+    confidence: hasConcreteEvidence ? confidence : "hypothesis",
+    evidence:
+      evidence.length > 0
+        ? evidence
+        : [
+            {
+              sourceType: "hypothesis",
+              evidenceNote: "LLM returned this insight without evidence; treat it as a hypothesis."
+            }
+          ],
+    recommendedAction: stringField(record.recommendedAction ?? record.recommended_action, "Review and validate this insight before use.")
+  };
+}
+
+function normalizeResearchEvidenceList(value: unknown): ResearchEvidence[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(normalizeResearchEvidence).filter((item): item is ResearchEvidence => Boolean(item));
+}
+
+function normalizeResearchEvidence(value: unknown): ResearchEvidence | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+
+  const sourceType = normalizeSourceType(record.sourceType ?? record.source_type);
+  const sourceUrl = optionalStringField(record.sourceUrl ?? record.source_url);
+  const uploadedAssetId = optionalStringField(record.uploadedAssetId ?? record.uploaded_asset_id);
+
+  if (sourceType === "uploaded_asset") {
+    return {
+      sourceType,
+      uploadedAssetId,
+      evidenceNote: stringField(record.evidenceNote ?? record.evidence_note, "Uploaded asset evidence returned without a note.")
+    };
+  }
+
+  if (sourceType === "hypothesis" || !sourceUrl) {
+    return {
+      sourceType: "hypothesis",
+      evidenceNote: stringField(record.evidenceNote ?? record.evidence_note, "Evidence source was missing; treated as a hypothesis.")
+    };
+  }
+
+  return {
+    sourceType,
+    sourceUrl,
+    evidenceNote: stringField(record.evidenceNote ?? record.evidence_note, "Evidence note was missing from the LLM response.")
+  };
+}
+
+function normalizePlatformNotes(value: unknown, platforms: ContentAngle["platform"][]): Record<string, string[]> {
+  const record = asRecord(value);
+  const notes: Record<string, string[]> = {};
+  for (const platform of platforms) {
+    const raw = record?.[platform];
+    notes[platform] = Array.isArray(raw) ? raw.map((item) => String(item)).filter(Boolean) : [];
+  }
+  return notes;
+}
+
+function normalizeContentAngles(value: unknown, platforms: ContentAngle["platform"][]): ContentAngle[] {
+  if (!Array.isArray(value)) return fallbackContentAngles(platforms);
+  const angles = value.map((item, index) => normalizeContentAngle(item, platforms, index)).filter((item): item is ContentAngle => Boolean(item));
+  return angles.length ? angles : fallbackContentAngles(platforms);
+}
+
+function normalizeContentAngle(value: unknown, platforms: ContentAngle["platform"][], index: number): ContentAngle | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const platform = normalizePlatform(record.platform, platforms[index] ?? platforms[0] ?? "linkedin");
+  return {
+    id: stringField(record.id, `angle-${platform}-${index + 1}`),
+    title: stringField(record.title, `DerbyUp ${platform} angle`),
+    platform,
+    hook: stringField(record.hook, "מי באמת מבין כדורגל?"),
+    format: stringField(record.format, platform === "linkedin" ? "text_post" : "vertical_short"),
+    cta: stringField(record.cta, "פתחו ליגה פרטית והזמינו חברים"),
+    sourceInsightIds: Array.isArray(record.sourceInsightIds)
+      ? record.sourceInsightIds.map((item) => String(item)).filter(Boolean)
+      : Array.isArray(record.source_insight_ids)
+        ? record.source_insight_ids.map((item) => String(item)).filter(Boolean)
+        : []
+  };
+}
+
+function fallbackContentAngles(platforms: ContentAngle["platform"][]): ContentAngle[] {
+  return platforms.map((platform, index) => ({
+    id: `angle-${platform}-${index + 1}`,
+    title: `DerbyUp matchday angle for ${platform}`,
+    platform,
+    hook: "מי באמת מבין כדורגל?",
+    format: platform === "linkedin" ? "text_post" : "vertical_short",
+    cta: "פתחו ליגה פרטית והזמינו חברים",
+    sourceInsightIds: []
+  }));
+}
+
+function normalizeCreativeDraft(
+  value: unknown,
+  angle: ContentAngle,
+  brand: BrandGuideline
+): Pick<SocialDraft, "caption" | "hook" | "imagePrompt" | "videoSpec"> {
+  const record = asRecord(value);
+  return {
+    caption: stringField(record?.caption, `${angle.hook}\n\n${angle.cta}`),
+    hook: stringField(record?.hook, angle.hook),
+    imagePrompt: optionalStringField(record?.imagePrompt ?? record?.image_prompt),
+    videoSpec: normalizeVideoSpec(record?.videoSpec ?? record?.video_spec, angle, brand)
+  };
+}
+
+function normalizeVideoSpec(value: unknown, angle: ContentAngle, brand: BrandGuideline): ShortVideoRenderSpec | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  return {
+    id: stringField(record.id, `video-${angle.id}`),
+    width: 1080,
+    height: 1920,
+    fps: 30,
+    durationSeconds: numberField(record.durationSeconds ?? record.duration_seconds, 18),
+    title: stringField(record.title, angle.title),
+    captions: Array.isArray(record.captions) ? record.captions.map((item) => String(item)).filter(Boolean) : [angle.hook, angle.cta],
+    cta: stringField(record.cta, angle.cta),
+    brand
+  };
+}
+
+function normalizeBrandReview(value: unknown): BrandReview {
+  const record = asRecord(value);
+  return {
+    passed: typeof record?.passed === "boolean" ? record.passed : false,
+    notes: normalizeStringArray(record?.notes),
+    requiredEdits: normalizeStringArray(record?.requiredEdits ?? record?.required_edits)
+  };
 }
 
 async function collectSerperSignals(input: PipelineInput): Promise<{ results: SerperSearchResult[]; error?: string }> {
@@ -353,4 +523,49 @@ function createYouTubeCompetitorPattern(videos: YouTubeSearchVideo[]) {
     ),
     recommendedAction: "Use these public video titles as inspiration for hooks and formats, but verify relevance before treating them as competitor proof."
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function stringField(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function optionalStringField(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function numberField(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+}
+
+function normalizeConfidence(value: unknown, fallback: Confidence): Confidence {
+  return value === "low" || value === "medium" || value === "high" || value === "hypothesis" ? value : fallback;
+}
+
+function normalizeSourceType(value: unknown): ResearchSourceType {
+  const allowed: ResearchSourceType[] = [
+    "serper_search",
+    "google_trends",
+    "youtube_api",
+    "rss",
+    "public_url",
+    "manual_competitor_url",
+    "uploaded_asset",
+    "internal_analytics",
+    "google_drive",
+    "hypothesis"
+  ];
+  return typeof value === "string" && allowed.includes(value as ResearchSourceType) ? (value as ResearchSourceType) : "hypothesis";
+}
+
+function normalizePlatform(value: unknown, fallback: ContentAngle["platform"]): ContentAngle["platform"] {
+  const allowed: ContentAngle["platform"][] = ["linkedin", "instagram", "tiktok", "youtube_shorts"];
+  return typeof value === "string" && allowed.includes(value as ContentAngle["platform"]) ? (value as ContentAngle["platform"]) : fallback;
 }

@@ -56,6 +56,46 @@ test("research task can run through an injected LLM provider", async () => {
   assert.match(provider.prompts[0] ?? "", /Create a content pack/);
 });
 
+test("research task normalizes snake_case and missing LLM evidence fields", async () => {
+  const provider = new StaticProvider({
+    marketSignals: [
+      {
+        id: "signal-snake-case",
+        insight: "Sports audiences respond to matchday urgency.",
+        confidence: "medium",
+        evidence: [
+          {
+            source_type: "manual_competitor_url",
+            source_url: "https://example.com/competitor",
+            evidence_note: "Snake case evidence from an LLM response."
+          },
+          {
+            source_type: "public_url"
+          }
+        ],
+        recommended_action: "Create a matchday countdown post."
+      }
+    ],
+    audienceInsights: [],
+    competitorPatterns: [],
+    riskFlags: [],
+    platformNotes: { instagram: ["Use short hooks."] }
+  });
+
+  const brief = await runResearchTask({
+    goal: "Create DerbyUp matchday content",
+    platforms: ["instagram"],
+    brand,
+    llmProvider: provider
+  });
+
+  assert.equal(brief.marketSignals[0]?.recommendedAction, "Create a matchday countdown post.");
+  assert.equal(brief.marketSignals[0]?.evidence[0]?.sourceType, "manual_competitor_url");
+  assert.equal(brief.marketSignals[0]?.evidence[0]?.evidenceNote, "Snake case evidence from an LLM response.");
+  assert.equal(brief.marketSignals[0]?.evidence[1]?.sourceType, "hypothesis");
+  assert.match(brief.marketSignals[0]?.evidence[1]?.evidenceNote ?? "", /missing/i);
+});
+
 test("research task adds YouTube public video evidence when connector is available", async () => {
   const brief = await runResearchTask({
     goal: "Create short proof videos",
@@ -245,6 +285,44 @@ test("strategy, creative, and brand tasks can use injected LLM JSON", async () =
   assert.equal(angles[0]?.id, "angle-linkedin-1");
   assert.equal(creative.hook, "מה ההוכחה הכי קצרה?");
   assert.equal(review.passed, true);
+});
+
+test("strategy, creative, and brand tasks normalize partial LLM JSON", async () => {
+  const angles = await runStrategyTask(
+    {
+      marketSignals: [],
+      audienceInsights: [],
+      competitorPatterns: [],
+      riskFlags: [],
+      platformNotes: {}
+    },
+    ["instagram"],
+    new StaticProvider([{ recommended_action: "ignored" }])
+  );
+
+  const creative = await runCreativeTask(
+    angles[0]!,
+    brand,
+    new StaticProvider({
+      caption: "  נועלים תחזית לפני השריקה  ",
+      image_prompt: "  Matchday leaderboard visual  "
+    })
+  );
+
+  const review = await runBrandReviewTask(
+    brand,
+    creative.caption,
+    creative.imagePrompt,
+    new StaticProvider({ notes: ["Needs sharper CTA"], required_edits: ["Add no-money-gambling clarity"] })
+  );
+
+  assert.equal(angles[0]?.platform, "instagram");
+  assert.equal(angles[0]?.hook, "מי באמת מבין כדורגל?");
+  assert.equal(creative.caption, "נועלים תחזית לפני השריקה");
+  assert.equal(creative.hook, "מי באמת מבין כדורגל?");
+  assert.equal(creative.imagePrompt, "Matchday leaderboard visual");
+  assert.equal(review.passed, false);
+  assert.deepEqual(review.requiredEdits, ["Add no-money-gambling clarity"]);
 });
 
 class StaticProvider implements AgentLlmProvider {
