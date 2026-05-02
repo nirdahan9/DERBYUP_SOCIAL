@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { URL } from "node:url";
 import { runSocialPipeline } from "@social-agents/agents";
 import { normalizeManualSourceUrls } from "@social-agents/shared";
@@ -187,11 +189,61 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && !url.pathname.startsWith("/api/")) {
+      const served = await sendWebAsset(response, url.pathname);
+      if (served) return;
+    }
+
     sendJson(response, 404, { error: "Not found." });
   } catch (error) {
     sendError(response, 500, error);
   }
 });
+
+async function sendWebAsset(response: Parameters<typeof sendJson>[0], pathname: string): Promise<boolean> {
+  const webRoot = path.resolve(process.cwd(), "../../apps/web/dist");
+  const requestedPath = pathname === "/" ? "/index.html" : pathname;
+  const safePath = path.normalize(requestedPath).replace(/^(\.\.[/\\])+/, "");
+  const filePath = path.join(webRoot, safePath);
+
+  if (!filePath.startsWith(webRoot)) {
+    sendJson(response, 403, { error: "Forbidden." });
+    return true;
+  }
+
+  try {
+    const body = await readFile(filePath);
+    response.writeHead(200, {
+      "content-type": contentType(filePath),
+      "cache-control": filePath.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable"
+    });
+    response.end(body);
+    return true;
+  } catch {
+    try {
+      const body = await readFile(path.join(webRoot, "index.html"));
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-cache"
+      });
+      response.end(body);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function contentType(filePath: string): string {
+  if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
+  if (filePath.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
+  if (filePath.endsWith(".svg")) return "image/svg+xml";
+  if (filePath.endsWith(".png")) return "image/png";
+  if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) return "image/jpeg";
+  if (filePath.endsWith(".webp")) return "image/webp";
+  return "application/octet-stream";
+}
 
 const port = Number(process.env.PORT ?? 4100);
 const host = process.env.HOST ?? (process.env.RAILWAY_ENVIRONMENT ? "0.0.0.0" : "127.0.0.1");

@@ -4,7 +4,7 @@ import { Check, Play, RefreshCw, X } from "lucide-react";
 import type { AgentDefinition, AgentEvent, PipelineRun, ResearchInsight, SocialDraft } from "@social-agents/shared";
 import "./styles.css";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4100";
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? "" : "http://localhost:4100");
 
 function App() {
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
